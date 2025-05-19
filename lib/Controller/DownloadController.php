@@ -117,7 +117,7 @@ class DownloadController extends GenericApiController
     #[NoAdminRequired]
     #[NoCSRFRequired]
     #[PublicPage]
-    public function one(int $fileid, bool $resumable = true): Http\Response
+  public function one(int $fileid, bool $resumable = true): Http\Response
     {
         return Util::guardExDirect(function (Http\IOutput $out) use ($fileid, $resumable) {
             $file = $this->fs->getUserFile($fileid);
@@ -147,25 +147,25 @@ class DownloadController extends GenericApiController
             [$seekStart, $seekEnd] = Util::explode_exact('-', $range, 2);
             $seekEnd = (empty($seekEnd)) ? ($size - 1) : min(abs((int) $seekEnd), $size - 1);
             $seekStart = (empty($seekStart) || $seekEnd < abs((int) $seekStart)) ? 0 : max(abs((int) $seekStart), 0);
-
-            // Only send partial content header if downloading a piece of the file
-            if ($seekStart > 0 || $seekEnd < ($size - 1)) {
+            $filename = str_replace('"', '\\"', $file->getName());
+       		
+        	if ($seekStart > 0 || $seekEnd < ($size - 1) || $resumable) {
                 $out->setHeader('HTTP/1.1 206 Partial Content');
                 $out->setHeader("Content-Range: bytes {$seekStart}-{$seekEnd}/{$size}");
             }
-
-            // Accept ranges only if resumable
+			
+        	$out->setHeader('Content-Length: '.($seekEnd - $seekStart + 1));
+            // Set headers for streaming
             if ($resumable) {
-                $out->setHeader('Accept-Ranges: bytes');
+            	$out->setHeader('Accept-Ranges: bytes');	
+            	$out->setHeader('Content-Type: '.$file->getMimeType());
+            	$out->setHeader('Content-Disposition: inline; filename="'.$filename.'"');
             }
-
-            // Set headers
-            $out->setHeader('Content-Length: '.($seekEnd - $seekStart + 1));
-            $out->setHeader('Content-Type: '.$file->getMimeType());
-
-            // Make sure the browser downloads the file
-            $filename = str_replace('"', '\"', $file->getName());
-            $out->setHeader('Content-Disposition: attachment; filename="'.$filename.'"');
+        	else {
+            // Set headers for normal download
+            	$out->setHeader('Content-Disposition: attachment; filename="'.$filename.'"');
+            }
+        	
 
             // Prevent output from being buffered
             $out->setHeader('Content-Encoding: none');
